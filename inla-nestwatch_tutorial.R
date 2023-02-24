@@ -58,16 +58,13 @@ mainv1_formula_withRegion <- as.formula(paste0(resp, " ~ ",
                                         " + f(UnCoor, model = 'iid')",
                                         " + f(Region, model = 'iid')"))
 
-TestHosts_samp <- slice_sample(TestHosts,prop = .1)
-write_rds(TestHosts_samp,"autocorr_data.rds")
+TestHosts_samp <- TestHosts # slice_sample(TestHosts,prop = .1)
 
 inla_noautocorr <- inla(mainv1_formula_withRegion,
                        family = "binomial",
                        data = TestHosts_samp,
                        control.compute = list(residuals = TRUE))
-write_rds(inla_noautocorr,"inla_noautocorr.rds")
-
-write_rds(inla_noautocorr$residuals$deviance.residuals,"resid_noautocorr.rds")
+write_rds(inla_noautocorr,"results/revisions/inla_noautocorr.rds")
 
 Efxplot(inla_noautocorr)
 
@@ -126,61 +123,17 @@ f_autocorr <- as.formula(paste0("at_least_one_success ~ -1 + Intercept + ",
                                 " + f(year, model = 'iid')",
                                 " + f(UnCoor, model = 'iid')"))
 
-f_linear <- f_autocorr %>% 
-  as.character() %>% 
-  str_remove_all(" \\+ NewLU1(Ag|Forest|Natural_open|Human)\\.Tmax_std_gridmet_sq") %>%
-  nth(3) %>%
-  paste0("at_least_one_success ~ ",.) %>%
-  as.formula()
-
-f_noint <- f_linear %>% 
-  as.character() %>% 
-  str_remove_all(" \\+ Tmax_std_gridmet.NewLU1(Ag|Forest|Natural_open|Human)") %>%
-  nth(3) %>%
-  paste0("at_least_one_success ~ ",.) %>%
-  as.formula()
-
 inla_autocorr <- inla(f_autocorr,
                       family = "binomial",
                       data = inla.stack.data(StackHost),
                       control.compute = list(dic = TRUE, residuals = TRUE),
                       control.predictor = list(A = inla.stack.A(StackHost)))
-write_rds(inla_autocorr,"inla_autocorr.rds")
-write_rds(inla_autocorr$residuals$deviance.residuals,"resid_autocorr.rds")
+write_rds(inla_autocorr,"results/revisions/inla_autocorr.rds")
 
-inla_autocorr_linear <- inla(f_linear,
-                      family = "binomial",
-                      data = inla.stack.data(StackHost),
-                      control.compute = list(dic = TRUE, residuals = TRUE),
-                      control.predictor = list(A = inla.stack.A(StackHost)))
-write_rds(inla_autocorr_linear,"inla_autocorr_linear.rds")
-write_rds(inla_autocorr_linear$residuals$deviance.residuals,"resid_autocorr_linear.rds")
+effects <- Efxplot(list(inla_noautocorr,inla_autocorr))
+write_rds(effects, "results/revisions/effects_plot.rds")
 
-inla_autocorr_noint <- inla(f_noint,
-                             family = "binomial",
-                             data = inla.stack.data(StackHost),
-                             control.compute = list(dic = TRUE, residuals = TRUE),
-                             control.predictor = list(A = inla.stack.A(StackHost)))
-write_rds(inla_autocorr_noint,"inla_autocorr_noint.rds")
-write_rds(inla_autocorr_noint$residuals$deviance.residuals, "resid_autocorr_noint.rds")
-
-effects <- Efxplot(list(inla_noautocorr,inla_autocorr, inla_autocorr_linear, inla_autocorr_noint))
-write_rds(effects, "effects_plot.rds")
-
-SpatialHostList <- list(inla_noautocorr,inla_autocorr, inla_autocorr_linear, inla_autocorr_noint)
+SpatialHostList <- list(inla_noautocorr,inla_autocorr)
 
 dic <- INLADICFig(SpatialHostList)
-write_rds(dic, "dic_plot.rds")
-
-# summary(inla_autocorr)$fixed['Tmax_std_gridmet.NewLU1Ag','mean']-summary(inla_noautocorr)$fixed['Tmax_std_gridmet:NewLU1Ag','mean']
-
-# rm(list = ls())
-
-source("Code/helper-functions.R")
-
-models = c('inla_noautocorr.rds',
-           'inla_autocorr.rds',
-           'inla_autocorr_linear.rds',
-           'inla_autocorr_noint.rds')
-
-run_moran_i(models,prop = .1, n = 500,outfile = 'morani_inla.rds')
+write_rds(dic, "results/revisions/dic_plot.rds")
